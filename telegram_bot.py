@@ -80,6 +80,7 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
     await update.message.reply_text(f"📄 جاري إنشاء كشف الحساب للعميل رقم {client_id}...")
     await process_account_statement(update, context, client_id)
 
+# إعداد المسارات
 FROM_DATE = "2023-01-01"
 TO_DATE = datetime.today().strftime("%Y-%m-%d")
 
@@ -92,67 +93,7 @@ invoices = pd.read_excel(os.path.join(BASE_PATH, "invoices.xlsx"))
 payments = pd.read_excel(os.path.join(BASE_PATH, "payments.xlsx"))
 credits = pd.read_excel(os.path.join(BASE_PATH, "credit_notes.xlsx"))
 
-template_html = """
-<!DOCTYPE html>
-<html lang=\"ar\" dir=\"rtl\">
-<head>
-    <meta charset=\"UTF-8\">
-    <style>
-        @font-face {
-            font-family: 'Cairo';
-            src: url('Cairo-Regular.ttf');
-        }
-        body {
-            font-family: 'Cairo', sans-serif;
-            direction: rtl;
-        }
-        h2 { text-align: center; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th, td { border: 1px solid #000; padding: 4px; text-align: center; }
-        .summary { margin-top: 10px; font-weight: bold; }
-    </style>
-</head>
-<body>
-    <h2>كشف حساب - {{ customer_name }}</h2>
-    <p style=\"text-align:center\">
-        مؤسسة روافد الخليجية<br>
-        تم التصدير بتاريخ {{ to_date }}<br>
-        عن الفترة من {{ from_date }} إلى {{ to_date }}
-    </p>
-    <table>
-        <thead>
-            <tr>
-                <th>التاريخ</th>
-                <th>النوع</th>
-                <th>وصف العملية</th>
-                <th>المرجع</th>
-                <th>مدين</th>
-                <th>دائن</th>
-                <th>الرصيد</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in rows %}
-            <tr>
-                <td>{{ row.date }}</td>
-                <td>{{ row.type }}</td>
-                <td>{{ row.description }}</td>
-                <td>{{ row.ref }}</td>
-                <td>{{ "{:,.2f}".format(row.debit) if row.debit else "" }}</td>
-                <td>{{ "{:,.2f}".format(row.credit) if row.credit else "" }}</td>
-                <td>{{ "{:,.2f}".format(row.balance) }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    <p class=\"summary\">الرصيد الختامي: {{ "{:,.2f}".format(final_balance) }}</p>
-</body>
-</html>
-"""
-
 template_path = os.path.join(BASE_PATH, "template.html")
-with open(template_path, "w", encoding="utf-8") as f:
-    f.write(template_html)
 
 env = Environment(loader=FileSystemLoader(BASE_PATH))
 template = env.get_template("template.html")
@@ -174,35 +115,46 @@ async def process_account_statement(update, context, client_id: int):
             except:
                 return ""
 
+        # فواتير العميل
         cust_invoices = invoices[invoices["contact_id"] == client_id]
         for _, row in cust_invoices.iterrows():
+            ref = f"INV-{row['id']}"
+            description = row["description"]
+            if pd.isna(description) or not str(description).strip():
+                description = f"فاتورة - {ref}"
             rows.append({
                 "date": format_date(row["issue_date"]),
                 "type": "فاتورة",
-                "description": row.get("description", ""),
-                "ref": f"INV-{row['id']}",
+                "description": description,
+                "ref": ref,
                 "debit": row["total"],
                 "credit": 0,
             })
 
+        # مدفوعات العميل
         cust_payments = payments[payments["contact_id"] == client_id]
         for _, row in cust_payments.iterrows():
+            ref = str(row["reference"])
+            description = row.get("description") or f"دفعة - {ref}"
             rows.append({
                 "date": format_date(row["date"]),
                 "type": "دفعة",
-                "description": row.get("description", ""),
-                "ref": str(row["reference"]),
+                "description": description,
+                "ref": ref,
                 "debit": 0,
                 "credit": row["amount"],
             })
 
+        # الإشعارات الدائنة
         cust_credits = credits[credits["contact_id"] == client_id]
         for _, row in cust_credits.iterrows():
+            ref = str(row["reference"])
+            description = f"إشعار دائن - {ref}"
             rows.append({
                 "date": format_date(row["issue_date"]),
                 "type": "إشعار دائن",
-                "description": "",
-                "ref": str(row["reference"]),
+                "description": description,
+                "ref": ref,
                 "debit": 0,
                 "credit": row["total_amount"],
             })
@@ -222,7 +174,29 @@ async def process_account_statement(update, context, client_id: int):
         )
 
         filename = os.path.join(OUTPUT_DIR, f"{customer_name}.pdf")
-        config = pdfkit.configuration(wkhtmltopdf="/app/bin/wkhtmltopdf") if os.getenv("RAILWAY_ENVIRONMENT") else None
+
+        if os.getenv("RAILWAY_ENVIRONMENT"):
+            wkhtmltopdf_path = os.path.abspath("bin/wkhtmltopdf")  # نسخة Linux
+        else:
+            wkhtmltopdf_path = r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe"
+
+        config = pdfkit.configuration(wkhtmltopdf=wkhtmltopdf_path)
+
+        font_path = os.path.abspath(os.path.join(BASE_PATH, "Cairo-Regular.ttf"))
+        font_css = f"""
+          <style>
+             @font-face {{
+                font-family: 'Cairo';
+                src: url('file:///{font_path.replace(os.sep, "/")}');
+             }}
+             body {{
+                font-family: 'Cairo', sans-serif;
+             }}
+          </style>
+        """
+
+        html = font_css + html
+
         pdfkit.from_string(html, filename, options={
             'encoding': 'UTF-8',
             'page-size': 'A4',

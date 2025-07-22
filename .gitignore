@@ -1,0 +1,25 @@
+# بيانات سرية
+.env
+authorized_users.json
+
+# ملفات ناتجة تلقائيًا
+*.pdf
+*.xlsx
+*.txt
+
+# مجلدات معينة
+__pycache__/
+data/statements/
+logs/
+reports/
+
+# ملفات النظام
+.DS_Store
+Thumbs.db
+
+# ملفات Editor
+.vscode/
+.idea/
+
+# بيئة افتراضية (لو مستخدم)
+venv/

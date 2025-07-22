@@ -77,3 +77,10 @@ websocket-client==1.8.0
 wsproto==1.2.0
 yarl==1.20.1
 xhtml2pdf
+python-telegram-bot==20.0
+python-dotenv
+pandas
+jinja2
+nest_asyncio
+pdfkit
+openpyxl
