@@ -3,7 +3,7 @@ import json
 import pandas as pd
 from dotenv import load_dotenv
 from telegram import Update
-import pdfkit
+from weasyprint import HTML
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
@@ -228,8 +228,7 @@ async def process_account_statement(update, context, client_id: int):
 
         # توليد PDF
         filename = os.path.join(OUTPUT_DIR, f"{customer_name}.pdf")
-        config = pdfkit.configuration(wkhtmltopdf=r"C:\Program Files\wkhtmltopdf\bin\wkhtmltopdf.exe")
-        pdfkit.from_string(html, filename, configuration=config)
+        HTML(string=html).write_pdf(filename)
 
         # إرسال الملف
         with open(filename, "rb") as f:
