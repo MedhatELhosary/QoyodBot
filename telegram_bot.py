@@ -3,13 +3,13 @@ import json
 import pandas as pd
 from dotenv import load_dotenv
 from telegram import Update
-from weasyprint import HTML
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 import nest_asyncio
 nest_asyncio.apply()
 import asyncio
+import pdfkit
 from data_updater import update_all_data, was_updated_today  # ✅ التعديل هنا
 
 # تحميل متغيرات البيئة
@@ -228,7 +228,7 @@ async def process_account_statement(update, context, client_id: int):
 
         # توليد PDF
         filename = os.path.join(OUTPUT_DIR, f"{customer_name}.pdf")
-        HTML(string=html).write_pdf(filename)
+        pdfkit.from_string(html, filename, configuration=config)
 
         # إرسال الملف
         with open(filename, "rb") as f:
@@ -245,4 +245,8 @@ async def main():
 
 if __name__ == "__main__":
     nest_asyncio.apply()
+    # إعداد wkhtmltopdf
+    WKHTMLTOPDF_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'wkhtmltopdf')
+    config = pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH)
+
     asyncio.run(main())
