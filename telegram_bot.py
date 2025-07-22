@@ -11,6 +11,7 @@ nest_asyncio.apply()
 import asyncio
 import pdfkit
 from data_updater import update_all_data, was_updated_today  # ✅ التعديل هنا
+config = pdfkit.configuration(wkhtmltopdf='/app/bin/wkhtmltopdf')
 
 # تحميل متغيرات البيئة
 load_dotenv()
