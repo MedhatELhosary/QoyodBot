@@ -19,7 +19,7 @@ geographiclib==2.0
 geopy==2.4.1
 h11==0.16.0
 httpcore==1.0.9
-httpx==0.28.1
+httpx==0.23.3
 idna==3.10
 Jinja2==3.1.6
 jiter==0.10.0
@@ -77,9 +77,3 @@ wsproto==1.2.0
 yarl==1.20.1
 xhtml2pdf
 python-telegram-bot==20.0
-python-dotenv
-pandas
-jinja2
-nest_asyncio
-pdfkit
-openpyxl
