@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# ندي صلاحية تنفيذ للـ wkhtmltopdf
-chmod +x bin/wkhtmltopdf
+# تثبيت wkhtmltopdf
+apt-get update
+apt-get install -y ./bin/wkhtmltox_0.12.6-1.focal_amd64.deb
 
-# نشغل البوت
+# بدء البوت
 python telegram_bot.py
