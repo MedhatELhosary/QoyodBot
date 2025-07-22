@@ -7,11 +7,11 @@ from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
 import nest_asyncio
-nest_asyncio.apply()
 import asyncio
+from data_updater import update_all_data, was_updated_today
 import pdfkit
-from data_updater import update_all_data, was_updated_today  # ✅ التعديل هنا
-config = pdfkit.configuration(wkhtmltopdf='/app/bin/wkhtmltopdf')
+
+nest_asyncio.apply()
 
 # تحميل متغيرات البيئة
 load_dotenv()
@@ -20,12 +20,10 @@ BOT_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
 AUTHORIZED_USERS_FILE = "authorized_users.json"
 
-# تأكد من وجود ملف المستخدمين
 if not os.path.exists(AUTHORIZED_USERS_FILE):
     with open(AUTHORIZED_USERS_FILE, "w", encoding="utf-8") as f:
         json.dump([], f)
 
-# تحميل المستخدمين المصرح لهم
 def load_authorized_users():
     with open(AUTHORIZED_USERS_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
@@ -44,7 +42,6 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = update.effective_user.id
     message = update.message.text.strip()
 
-    # ✅ التحقق من كلمة السر
     if not is_authorized(user_id):
         if "awaiting_password" not in context.user_data:
             context.user_data["awaiting_password"] = True
@@ -58,7 +55,6 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await update.message.reply_text("❌ كلمة المرور غير صحيحة. حاول مرة أخرى.")
         return
 
-    # ✅ التأكد من الكود المرسل
     if not message.isdigit():
         await update.message.reply_text("❌ من فضلك أرسل رقم معرف العميل (ID) فقط.")
         return
@@ -83,29 +79,33 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     await update.message.reply_text(f"📄 جاري إنشاء كشف الحساب للعميل رقم {client_id}...")
     await process_account_statement(update, context, client_id)
-# إعدادات عامة
+
 FROM_DATE = "2023-01-01"
 TO_DATE = datetime.today().strftime("%Y-%m-%d")
 
-# المسارات
 BASE_PATH = "data"
 OUTPUT_DIR = os.path.join(BASE_PATH, "statements")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# تحميل البيانات من ملفات Excel
 contacts = pd.read_excel(os.path.join(BASE_PATH, "contacts.xlsx"))
 invoices = pd.read_excel(os.path.join(BASE_PATH, "invoices.xlsx"))
 payments = pd.read_excel(os.path.join(BASE_PATH, "payments.xlsx"))
 credits = pd.read_excel(os.path.join(BASE_PATH, "credit_notes.xlsx"))
 
-# إعداد قالب Jinja2
 template_html = """
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang=\"ar\" dir=\"rtl\">
 <head>
-    <meta charset="UTF-8">
+    <meta charset=\"UTF-8\">
     <style>
-        body { font-family: 'Arial'; direction: rtl; }
+        @font-face {
+            font-family: 'Cairo';
+            src: url('Cairo-Regular.ttf');
+        }
+        body {
+            font-family: 'Cairo', sans-serif;
+            direction: rtl;
+        }
         h2 { text-align: center; }
         table { width: 100%; border-collapse: collapse; font-size: 13px; }
         th, td { border: 1px solid #000; padding: 4px; text-align: center; }
@@ -114,7 +114,7 @@ template_html = """
 </head>
 <body>
     <h2>كشف حساب - {{ customer_name }}</h2>
-    <p style="text-align:center">
+    <p style=\"text-align:center\">
         مؤسسة روافد الخليجية<br>
         تم التصدير بتاريخ {{ to_date }}<br>
         عن الفترة من {{ from_date }} إلى {{ to_date }}
@@ -145,10 +145,11 @@ template_html = """
             {% endfor %}
         </tbody>
     </table>
-    <p class="summary">الرصيد الختامي: {{ "{:,.2f}".format(final_balance) }}</p>
+    <p class=\"summary\">الرصيد الختامي: {{ "{:,.2f}".format(final_balance) }}</p>
 </body>
 </html>
 """
+
 template_path = os.path.join(BASE_PATH, "template.html")
 with open(template_path, "w", encoding="utf-8") as f:
     f.write(template_html)
@@ -156,10 +157,8 @@ with open(template_path, "w", encoding="utf-8") as f:
 env = Environment(loader=FileSystemLoader(BASE_PATH))
 template = env.get_template("template.html")
 
-# -----------------------
 async def process_account_statement(update, context, client_id: int):
     try:
-        # التحقق من وجود العميل
         customer = contacts[contacts["id"] == client_id]
         if customer.empty:
             await update.message.reply_text("❌ لم يتم العثور على هذا العميل.")
@@ -175,7 +174,6 @@ async def process_account_statement(update, context, client_id: int):
             except:
                 return ""
 
-        # الفواتير
         cust_invoices = invoices[invoices["contact_id"] == client_id]
         for _, row in cust_invoices.iterrows():
             rows.append({
@@ -187,7 +185,6 @@ async def process_account_statement(update, context, client_id: int):
                 "credit": 0,
             })
 
-        # المدفوعات
         cust_payments = payments[payments["contact_id"] == client_id]
         for _, row in cust_payments.iterrows():
             rows.append({
@@ -199,7 +196,6 @@ async def process_account_statement(update, context, client_id: int):
                 "credit": row["amount"],
             })
 
-        # الإشعارات الدائنة
         cust_credits = credits[credits["contact_id"] == client_id]
         for _, row in cust_credits.iterrows():
             rows.append({
@@ -211,14 +207,12 @@ async def process_account_statement(update, context, client_id: int):
                 "credit": row["total_amount"],
             })
 
-        # ترتيب العمليات وحساب الرصيد
         rows = sorted(rows, key=lambda x: datetime.strptime(x["date"], "%d-%m-%Y") if x["date"] else datetime.min)
         balance = 0
         for row in rows:
             balance += row["debit"] - row["credit"]
             row["balance"] = balance
 
-        # توليد HTML
         html = template.render(
             customer_name=customer_name,
             from_date=format_date(FROM_DATE),
@@ -227,11 +221,18 @@ async def process_account_statement(update, context, client_id: int):
             final_balance=balance
         )
 
-        # توليد PDF
         filename = os.path.join(OUTPUT_DIR, f"{customer_name}.pdf")
-        pdfkit.from_string(html, filename, configuration=config)
+        config = pdfkit.configuration(wkhtmltopdf="/app/bin/wkhtmltopdf") if os.getenv("RAILWAY_ENVIRONMENT") else None
+        pdfkit.from_string(html, filename, options={
+            'encoding': 'UTF-8',
+            'page-size': 'A4',
+            'margin-top': '10mm',
+            'margin-bottom': '10mm',
+            'margin-left': '10mm',
+            'margin-right': '10mm',
+            'enable-local-file-access': None
+        }, configuration=config)
 
-        # إرسال الملف
         with open(filename, "rb") as f:
             await update.message.reply_document(f, filename=os.path.basename(filename))
             await update.message.reply_text("✅ تم إرسال كشف الحساب بنجاح.")
@@ -245,9 +246,4 @@ async def main():
     await app.run_polling()
 
 if __name__ == "__main__":
-    nest_asyncio.apply()
-    # إعداد wkhtmltopdf
-    WKHTMLTOPDF_PATH = os.path.join(os.path.dirname(__file__), 'bin', 'wkhtmltopdf')
-    config = pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH)
-
     asyncio.run(main())
